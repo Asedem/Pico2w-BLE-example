@@ -28,6 +28,7 @@ set(BTSTACK_ROOT ${PICO_SDK_PATH}/lib/btstack)
 
 add_executable(foo
     server.c
+    ble_server.c
     )
 target_include_directories(foo PUBLIC
     ${CMAKE_CURRENT_LIST_DIR}
