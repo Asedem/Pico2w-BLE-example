@@ -1,15 +1,16 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <c++/14.3.1/math.h>
-#include <c++/14.3.1/stdlib.h>
 
 #include "pico/stdlib.h"
 #include "pico/cyw43_arch.h"
 #include "ble_server.h"
+#include "hardware/i2c.h"
 
 #define GENERIC_MESSAGE_SEND_INTERVAL_MS 1000
+#define STARTUP_SLEEP_MS 2000
 
+// GPS DEFINES
 #define UART_ID uart1
 #define BAUD_RATE 9600
 
@@ -17,6 +18,12 @@
 #define UART_RX_PIN 9
 
 #define BUFFER_SIZE 128
+
+// IMU DEFINES
+#define I2C_PORT i2c0
+#define SDA_PIN 4
+#define SCL_PIN 5
+#define MPU_ADDR 0x68
 
 static repeating_timer_t timer;
 static uint32_t message_counter = 0;
@@ -42,8 +49,20 @@ float convert_to_decimal(char *coord, char dir) {
     return decimal;
 }
 
+void mpu_write(uint8_t reg, uint8_t data) {
+    uint8_t buf[2] = {reg, data};
+    i2c_write_blocking(I2C_PORT, MPU_ADDR, buf, 2, false);
+}
+
+void mpu_read(uint8_t reg, uint8_t *buf, uint8_t len) {
+    i2c_write_blocking(I2C_PORT, MPU_ADDR, &reg, 1, true);
+    i2c_read_blocking(I2C_PORT, MPU_ADDR, buf, len, false);
+}
+
 int main() {
     stdio_init_all();
+
+    sleep_ms(STARTUP_SLEEP_MS);
 
     start_server();
 
@@ -51,7 +70,7 @@ int main() {
         printf("Failed to add repeating timer for messages!\n");
     }*/
 
-    uart_init(UART_ID, BAUD_RATE);
+    /*uart_init(UART_ID, BAUD_RATE);
 
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
@@ -64,7 +83,7 @@ int main() {
 
     while (true) {
         while (uart_is_readable(UART_ID)) {
-            char c = uart_getc(UART_ID);
+            char c = uart_getc(UART_ID);*/
 
             /*if (c == '\n') {
                 buffer[index] = '\0';
@@ -106,8 +125,38 @@ int main() {
                     buffer[index++] = c;
                 }
             }*/
-            printf("%c", c);
+    /*        printf("%c", c);
         }
+    }*/
+
+    i2c_init(I2C_PORT, 400 * 1000);
+    gpio_set_function(SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(SDA_PIN);
+    gpio_pull_up(SCL_PIN);
+
+    // Wake MPU (deactivate sleep)
+    mpu_write(0x6B, 0x00);
+    sleep_ms(100);
+
+    uint8_t raw[6];
+
+    while (true) {
+        mpu_read(0x3B, raw, 6); // ACCEL_XOUT_H Register
+
+        // Combine high and low bytes
+        int16_t ax = (raw[0] << 8) | raw[1];
+        int16_t ay = (raw[2] << 8) | raw[3];
+        int16_t az = (raw[4] << 8) | raw[5];
+
+        // Convert to G-force (using the 16384 LSB/g scale factor)
+        float acc_x = ax / 16384.0f;
+        float acc_y = ay / 16384.0f;
+        float acc_z = az / 16384.0f;
+
+        printf("Acc X: %.2f g | Acc Y: %.2f g | Acc Z: %.2f g\n", acc_x, acc_y, acc_z);
+
+        sleep_ms(500);
     }
 
     cancel_repeating_timer(&timer);

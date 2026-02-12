@@ -41,6 +41,7 @@ target_link_libraries(foo
         pico_cyw43_arch_none
         hardware_adc
         hardware_uart
+        hardware_i2c
 )
 
 pico_enable_stdio_usb(foo 1)
