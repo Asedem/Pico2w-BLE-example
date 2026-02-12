@@ -16,6 +16,8 @@
 #define UART_TX_PIN 8
 #define UART_RX_PIN 9
 
+#define BUFFER_SIZE 128
+
 static repeating_timer_t timer;
 static uint32_t message_counter = 0;
 static char message_buffer[20];
@@ -57,9 +59,53 @@ int main() {
     uart_set_hw_flow(UART_ID, false, false);
     uart_set_format(UART_ID, 8, 1, UART_PARITY_NONE);
 
+    char buffer[BUFFER_SIZE];
+    int index = 0;
+
     while (true) {
         while (uart_is_readable(UART_ID)) {
             char c = uart_getc(UART_ID);
+
+            /*if (c == '\n') {
+                buffer[index] = '\0';
+
+                if (strstr(buffer, "$GPRMC")) {
+
+                    char *token;
+                    int field = 0;
+
+                    char lat[16] = {0};
+                    char lon[16] = {0};
+                    char lat_dir = 0;
+                    char lon_dir = 0;
+
+                    token = strtok(buffer, ",");
+
+                    while (token != NULL) {
+                        field++;
+
+                        if (field == 4) strcpy(lat, token);
+                        if (field == 5) lat_dir = token[0];
+                        if (field == 6) strcpy(lon, token);
+                        if (field == 7) lon_dir = token[0];
+
+                        token = strtok(NULL, ",");
+                    }
+
+                    if (lat[0] != 0 && lon[0] != 0) {
+                        float latitude = convert_to_decimal(lat, lat_dir);
+                        float longitude = convert_to_decimal(lon, lon_dir);
+
+                        printf("Lat: %.6f  Lon: %.6f", latitude, longitude);
+                    }
+                }
+
+                index = 0;
+            } else {
+                if (index < BUFFER_SIZE - 1) {
+                    buffer[index++] = c;
+                }
+            }*/
             printf("%c", c);
         }
     }
