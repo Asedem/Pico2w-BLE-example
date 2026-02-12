@@ -8,7 +8,7 @@
 #include "hardware/i2c.h"
 
 #define GENERIC_MESSAGE_SEND_INTERVAL_MS 1000
-#define STARTUP_SLEEP_MS 2000
+#define STARTUP_SLEEP_MS 1000
 
 // GPS DEFINES
 #define UART_ID uart1
@@ -57,6 +57,31 @@ void mpu_write(uint8_t reg, uint8_t data) {
 void mpu_read(uint8_t reg, uint8_t *buf, uint8_t len) {
     i2c_write_blocking(I2C_PORT, MPU_ADDR, &reg, 1, true);
     i2c_read_blocking(I2C_PORT, MPU_ADDR, buf, len, false);
+}
+
+float offset_x = 0, offset_y = 0, offset_z = 0;
+
+void calibrate_mpu() {
+    int num_samples = 20;
+    int32_t sum_x = 0, sum_y = 0, sum_z = 0;
+    uint8_t raw[6];
+
+    printf("Calibrating... Keep sensor level and still.\n");
+
+    for (int i = 0; i < num_samples; i++) {
+        mpu_read(0x3B, raw, 6);
+        sum_x += (int16_t)((raw[0] << 8) | raw[1]);
+        sum_y += (int16_t)((raw[2] << 8) | raw[3]);
+        sum_z += (int16_t)((raw[4] << 8) | raw[5]);
+        sleep_ms(10);
+    }
+
+    offset_x = (float)sum_x / num_samples;
+    offset_y = (float)sum_y / num_samples;
+    // We expect Z to be 1g (16384), so we only subtract the deviation from 16384
+    offset_z = ((float)sum_z / num_samples) - 16384.0f;
+
+    printf("Calibration complete!\n");
 }
 
 int main() {
@@ -135,28 +160,35 @@ int main() {
     gpio_pull_up(SDA_PIN);
     gpio_pull_up(SCL_PIN);
 
-    // Wake MPU (deactivate sleep)
-    mpu_write(0x6B, 0x00);
+    mpu_write(0x6B, 0x00); // Wake MPU (deactivate sleep)
+    mpu_write(0x1A, 0x03); // Using internal Digital Low Pass Filter
     sleep_ms(100);
+
+    calibrate_mpu();
 
     uint8_t raw[6];
 
     while (true) {
-        mpu_read(0x3B, raw, 6); // ACCEL_XOUT_H Register
+        mpu_read(0x3B, raw, 6);
 
-        // Combine high and low bytes
-        int16_t ax = (raw[0] << 8) | raw[1];
-        int16_t ay = (raw[2] << 8) | raw[3];
-        int16_t az = (raw[4] << 8) | raw[5];
+        // 1. Get Raw Data
+        int16_t raw_ax = (raw[0] << 8) | raw[1];
+        int16_t raw_ay = (raw[2] << 8) | raw[3];
+        int16_t raw_az = (raw[4] << 8) | raw[5];
 
-        // Convert to G-force (using the 16384 LSB/g scale factor)
-        float acc_x = ax / 16384.0f;
-        float acc_y = ay / 16384.0f;
-        float acc_z = az / 16384.0f;
+        // 2. Apply Calibration Offsets
+        float cal_ax = (float)raw_ax - offset_x;
+        float cal_ay = (float)raw_ay - offset_y;
+        float cal_az = (float)raw_az - offset_z;
 
-        printf("Acc X: %.2f g | Acc Y: %.2f g | Acc Z: %.2f g\n", acc_x, acc_y, acc_z);
+        // 4. Convert to Gs
+        float final_gx = cal_ax / 16384.0f;
+        float final_gy = cal_ay / 16384.0f;
+        float final_gz = cal_az / 16384.0f;
 
-        sleep_ms(500);
+        printf("X: %.2f g  Y: %.2f g  Z: %.2f g\n", final_gx, final_gy, final_gz);
+
+        sleep_ms(50);
     }
 
     cancel_repeating_timer(&timer);
