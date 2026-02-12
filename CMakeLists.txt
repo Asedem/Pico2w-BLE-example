@@ -19,7 +19,7 @@ pico_sdk_init()
 add_compile_options(-Wall
         -Wno-format          # int != int32_t as far as the compiler is concerned because gcc has int32_t as long int
         -Wno-unused-function # we have some for the docs that aren't called
-        )
+)
 if (CMAKE_C_COMPILER_ID STREQUAL "GNU")
     add_compile_options(-Wno-maybe-uninitialized)
 endif()
@@ -27,19 +27,24 @@ endif()
 set(BTSTACK_ROOT ${PICO_SDK_PATH}/lib/btstack)
 
 add_executable(foo
-    server.c
-    ble_server.c
-    )
+        server.c
+        ble_server.c
+)
+
 target_include_directories(foo PUBLIC
-    ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}
 )
 target_link_libraries(foo
-    pico_stdlib
-    pico_btstack_ble
-    pico_btstack_cyw43
-    pico_cyw43_arch_none
-    hardware_adc
-    )
+        pico_stdlib
+        pico_btstack_ble
+        pico_btstack_cyw43
+        pico_cyw43_arch_none
+        hardware_adc
+        hardware_uart
+)
+
+pico_enable_stdio_usb(foo 1)
+pico_enable_stdio_uart(foo 0)
 
 pico_btstack_make_gatt_header(foo PRIVATE "${CMAKE_CURRENT_LIST_DIR}/foo.gatt")
 
